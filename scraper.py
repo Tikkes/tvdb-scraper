@@ -128,8 +128,8 @@ def main(argv):
                 episodename = episode['episodename']
 
             full_title = show['seriesname'].encode('utf-8') + " S" + str(
-                season_num) + "E" + str(
-                    episode_num) + " - " + episodename.encode('utf-8')
+                season_num).zfill(2) + "E" + str(
+                    episode_num).zfill(2) + " - " + episodename.encode('utf-8')
             episode_year = episode['firstAired'][0:4].encode('utf-8')
             episode_name = episodename.encode('utf-8')
             premiered = episode['firstAired'].encode('utf-8')
