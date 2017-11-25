@@ -19,19 +19,64 @@ flags.DEFINE_string('series', None, 'series to look up')
 
 BASE_URL = 'https://raw.githubusercontent.com/Tikkes/darkside-repo/master/xml/'
 
-# FULLTITLE = ""
-# IMDBID = ""
-# tvdbId = ""
-# tvShowTitle = ""
-# year = ""
-# episodeName = ""
-# premiered = ""
-# seasonNumber = ""
-# episodeNumber = ""
+XML_SEASON_TEMPLATE = """
+################################################################################
+<poster>Tikkes</poster>
+<thumbnail></thumbnail>
+<fanart></fanart>
+################################################################################
+"""
 
-# show = ""
-# season = ""
-# episode = ""
+XML_SEASON_BODY_TEMPLATE = """
+<dir>
+    <name>%(seasonName)s</name>
+    <meta>
+        <content>season</content>
+        <imdb>%(imdbId)s</imdb>
+        <tvdb>%(tvdbId)s</tvdb>
+        <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
+        <year>%(year)s</year>
+        <season>%(seasonNumber)s</season>
+    </meta>
+    <link>""" + BASE_URL + """%(tvShowTitleURL)s/%(seasonFileName)s.xml</link>
+    <animated_thumbnail></animated_thumbnail>
+    <thumbnail></thumbnail>
+    <animated_fanart></animated_fanart>
+    <fanart></fanart>
+</dir>"""
+
+XML_EPISODE_TEMPLATE = """
+################################################################################
+<poster>Tikkes</poster>
+<cache>10800</poster>
+<thumbnail></thumbnail>
+<fanart></fanart>
+################################################################################
+"""
+
+XML_EPISODE_BODY_TEMPLATE = """
+<item>
+    <title>%(fullTitle)s</title>
+    <meta>
+        <content>episode</content>
+        <imdb>%(imdbId)s</imdb>
+        <tvdb>%(tvdbId)s</tvdb>
+        <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
+        <year>%(year)s</year>
+        <title>%(episodeName)s</title>
+        <premiered>%(premiered)s</premiered>
+        <season>%(seasonNumber)s</season>
+        <episode>%(episodeNumber)s</episode>
+    </meta>
+    <link>
+        <sublink>search</sublink>
+        <sublink>searchsd</sublink>
+    </link>
+    <animated_thumbnail></animated_thumbnail>
+    <thumbnail></thumbnail>
+    <animated_fanart></animated_fanart>
+    <fanart></fanart>
+</item>"""
 
 
 def main(argv):
@@ -45,67 +90,12 @@ def main(argv):
         print("TV Show not found!")
         return
 
-    XML_SEASON = """
-    ################################################################################
-    <poster>Tikkes</poster>
-    <thumbnail></thumbnail>
-    <fanart></fanart>
-    ################################################################################
-    """
-
-    XML_SEASON_BODY = """
-    <dir>
-        <name>%(seasonName)s</name>
-        <meta>
-            <content>season</content>
-            <imdb>%(imdbId)s</imdb>
-            <tvdb>%(tvdbId)s</tvdb>
-            <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
-            <year>%(year)s</year>
-            <season>%(seasonNumber)s</season>
-        </meta>
-        <link>""" + BASE_URL + """%(tvShowTitleURL)s/%(seasonFileName)s.xml</link>
-        <animated_thumbnail></animated_thumbnail>
-        <thumbnail></thumbnail>
-        <animated_fanart></animated_fanart>
-        <fanart></fanart>
-    </dir>"""
-
-    XML_EPISODE = """
-    ################################################################################
-    <poster>Tikkes</poster>
-    <cache>10800</poster>
-    <thumbnail></thumbnail>
-    <fanart></fanart>
-    ################################################################################
-    """
-
-    XML_EPISODE_BODY = """
-    <item>
-        <title>%(fullTitle)s</title>
-        <meta>
-            <content>episode</content>
-            <imdb>%(imdbId)s</imdb>
-            <tvdb>%(tvdbId)s</tvdb>
-            <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
-            <year>%(year)s</year>
-            <title>%(episodeName)s</title>
-            <premiered>%(premiered)s</premiered>
-            <season>%(seasonNumber)s</season>
-            <episode>%(episodeNumber)s</episode>
-        </meta>
-        <link>
-            <sublink>search</sublink>
-            <sublink>searchsd</sublink>
-        </link>
-        <animated_thumbnail></animated_thumbnail>
-        <thumbnail></thumbnail>
-        <animated_fanart></animated_fanart>
-        <fanart></fanart>
-    </item>"""
+    xml_season = XML_SEASON_TEMPLATE
 
     for season_num in show:
         season = show[season_num]
+
+        xml_episode = XML_EPISODE_TEMPLATE
 
         tvdb_id = str(show['id'])
         imdb_id = show['imdbId'].encode('utf-8')
@@ -117,7 +107,7 @@ def main(argv):
         season_filename = re.sub('\W+', '',
                                  show['seriesname']) + str(season_num).zfill(2)
 
-        SeasonData = {
+        season_data = {
             'seasonName': season_name,
             'imdbId': imdb_id,
             'tvdbId': tvdb_id,
@@ -127,7 +117,8 @@ def main(argv):
             'seasonNumber': season_number,
             'seasonFileName': season_filename
         }
-        XML_SEASON += XML_SEASON_BODY % SeasonData
+
+        xml_season += XML_SEASON_BODY_TEMPLATE % season_data
 
         for episode_num in season:
             episode = season[episode_num]
@@ -144,7 +135,7 @@ def main(argv):
             premiered = episode['firstAired'].encode('utf-8')
             episode_number = str(episode_num)
 
-            data = {
+            episode_data = {
                 'fullTitle': full_title,
                 'imdbId': imdb_id,
                 'tvdbId': tvdb_id,
@@ -156,7 +147,7 @@ def main(argv):
                 'episodeNumber': episode_number
             }
 
-            XML_EPISODE += XML_EPISODE_BODY % data
+            xml_episode += XML_EPISODE_BODY_TEMPLATE % episode_data
 
         current_directory = os.getcwd()
         xml_directory = os.path.join(current_directory, r'xml')
@@ -172,12 +163,12 @@ def main(argv):
         save_path_file = (
             'xml\\' + show_directory + '\\' + show_directory + '.xml')
         with open(save_path_file, 'w') as xml_file:
-            xml_file.write(XML_SEASON)
+            xml_file.write(xml_season)
 
         save_path_file = ('xml\\' + show_directory + '\\' + show_directory +
                           str(season_num).zfill(2) + '.xml')
         with open(save_path_file, 'w') as xml_file:
-            xml_file.write(XML_EPISODE)
+            xml_file.write(xml_episode)
     print("XML files written to " + final_directory)
 
 
