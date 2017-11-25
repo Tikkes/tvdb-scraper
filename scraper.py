@@ -5,191 +5,181 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import errno
 import os
-import pdb
+import re
 import sys
-import traceback
 import tvdb_api
 
-from absl import app
-from absl import command_name
 from absl import flags
-from absl import logging
-from xml.dom import minidom
+# from absl import logging
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('series', None, 'series to look up')
 
-GIT_PATH = 'https://raw.githubusercontent.com/Tikkes/darkside-repo/master/xml/'
+BASE_URL = 'https://raw.githubusercontent.com/Tikkes/darkside-repo/master/xml/'
 
-fullTitle = ""
-imdbId = ""
-tvdbId = ""
-tvShowTitle = ""
-year = ""
-episodeName = ""
-premiered = ""
-seasonNumber = ""
-episodeNumber = ""
+# FULLTITLE = ""
+# IMDBID = ""
+# tvdbId = ""
+# tvShowTitle = ""
+# year = ""
+# episodeName = ""
+# premiered = ""
+# seasonNumber = ""
+# episodeNumber = ""
 
-show = ""
-season = ""
-episode = ""
+# show = ""
+# season = ""
+# episode = ""
 
 
 def main(argv):
+    """ Main function. """
     argv = FLAGS(argv)
 
-    t = tvdb_api.Tvdb()
+    tvdb = tvdb_api.Tvdb()
     try:
-        show = t[FLAGS.series]
-    except(tvdb_api.tvdb_shownotfound):
+        show = tvdb[FLAGS.series]
+    except tvdb_api.tvdb_shownotfound:
         print("TV Show not found!")
         return
 
-    xmlSeriesTemplate = """
-################################################################################
-<poster>Tikkes</poster>
-<thumbnail></thumbnail>
-<fanart></fanart>
-################################################################################
-"""
-
-    xmlSeriesTemplateBody = """
-<dir>
-    <name>%(seasonName)s</name>
-    <meta>
-        <content>season</content>
-        <imdb>%(imdbId)s</imdb>
-        <tvdb>%(tvdbId)s</tvdb>
-        <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
-        <year>%(year)s</year>
-        <season>%(seasonNumber)s</season>
-    </meta>
-    <link>""" + GIT_PATH + """%(seasonFileName)s.xml</link>
-    <animated_thumbnail></animated_thumbnail>
+    XML_SEASON = """
+    ################################################################################
+    <poster>Tikkes</poster>
     <thumbnail></thumbnail>
-    <animated_fanart></animated_fanart>
     <fanart></fanart>
-</dir>"""
+    ################################################################################
+    """
 
-    xmlTemplateBody = """
-<item>
-    <title>%(fullTitle)s</title>
-    <meta>
-        <content>episode</content>
-        <imdb>%(imdbId)s</imdb>
-        <tvdb>%(tvdbId)s</tvdb>
-        <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
-        <year>%(year)s</year>
-        <title>%(episodeName)s</title>
-        <premiered>%(premiered)s</premiered>
-        <season>%(seasonNumber)s</season>
-        <episode>%(episodeNumber)s</episode>
-    </meta>
-    <link>
-        <sublink>search</sublink>
-        <sublink>searchsd</sublink>
-    </link>
-    <animated_thumbnail></animated_thumbnail>
+    XML_SEASON_BODY = """
+    <dir>
+        <name>%(seasonName)s</name>
+        <meta>
+            <content>season</content>
+            <imdb>%(imdbId)s</imdb>
+            <tvdb>%(tvdbId)s</tvdb>
+            <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
+            <year>%(year)s</year>
+            <season>%(seasonNumber)s</season>
+        </meta>
+        <link>""" + BASE_URL + """%(tvShowTitleURL)s/%(seasonFileName)s.xml</link>
+        <animated_thumbnail></animated_thumbnail>
+        <thumbnail></thumbnail>
+        <animated_fanart></animated_fanart>
+        <fanart></fanart>
+    </dir>"""
+
+    XML_EPISODE = """
+    ################################################################################
+    <poster>Tikkes</poster>
+    <cache>10800</poster>
     <thumbnail></thumbnail>
-    <animated_fanart></animated_fanart>
     <fanart></fanart>
-</item>"""
+    ################################################################################
+    """
 
-    for s in show:
-        season = show[s]
-        xmlTemplate = """
-################################################################################
-<poster>Tikkes</poster>
-<cache>10800</poster>
-<thumbnail></thumbnail>
-<fanart></fanart>
-################################################################################
-"""
-        seasonData = {
-            'seasonName':
-            (show['seriesname'].encode('utf-8') + " Season " + str(s)),
-            'imdbId':
-            show['imdbId'].encode('utf-8'),
-            'tvdbId':
-            str(show['id']),
-            'tvShowTitle':
-            show['seriesname'].encode('utf-8'),
-            'year':
-            show['firstAired'][0:4].encode('utf-8'),
-            'seasonNumber':
-            str(s),
-            'seasonFileName':
-            show['seriesname'].encode('utf-8').replace(" ", "") +
-            str(s).zfill(2)
+    XML_EPISODE_BODY = """
+    <item>
+        <title>%(fullTitle)s</title>
+        <meta>
+            <content>episode</content>
+            <imdb>%(imdbId)s</imdb>
+            <tvdb>%(tvdbId)s</tvdb>
+            <tvshowtitle>%(tvShowTitle)s</tvshowtitle>
+            <year>%(year)s</year>
+            <title>%(episodeName)s</title>
+            <premiered>%(premiered)s</premiered>
+            <season>%(seasonNumber)s</season>
+            <episode>%(episodeNumber)s</episode>
+        </meta>
+        <link>
+            <sublink>search</sublink>
+            <sublink>searchsd</sublink>
+        </link>
+        <animated_thumbnail></animated_thumbnail>
+        <thumbnail></thumbnail>
+        <animated_fanart></animated_fanart>
+        <fanart></fanart>
+    </item>"""
+
+    for season_num in show:
+        season = show[season_num]
+
+        tvdb_id = str(show['id'])
+        imdb_id = show['imdbId'].encode('utf-8')
+        season_name = (
+            show['seriesname'].encode('utf-8') + " Season " + str(season_num))
+        tv_show_title = show['seriesname'].encode('utf-8')
+        year = show['firstAired'][0:4].encode('utf-8')
+        season_number = str(season_num)
+        season_filename = re.sub('\W+', '',
+                                 show['seriesname']) + str(season_num).zfill(2)
+
+        SeasonData = {
+            'seasonName': season_name,
+            'imdbId': imdb_id,
+            'tvdbId': tvdb_id,
+            'tvShowTitle': tv_show_title,
+            'tvShowTitleURL': re.sub('\W+', '', tv_show_title),
+            'year': year,
+            'seasonNumber': season_number,
+            'seasonFileName': season_filename
         }
-        xmlSeriesTemplate += xmlSeriesTemplateBody % seasonData
+        XML_SEASON += XML_SEASON_BODY % SeasonData
 
-        for e in season:
-            episode = season[e]
+        for episode_num in season:
+            episode = season[episode_num]
             if not episode['episodename']:
                 episodename = "N/A"
             else:
                 episodename = episode['episodename']
 
-            data = {
-                'fullTitle':
-                show['seriesname'].encode('utf-8') + ' S' + str(s).zfill(2) +
-                'E' + str(e).zfill(2) + ' - ' + episodename.encode('utf-8'),
-                'imdbId':
-                show['imdbId'].encode('utf-8'),
-                'tvdbId':
-                str(show['id']),
-                'tvShowTitle':
-                show['seriesname'].encode('utf-8'),
-                'year':
-                episode['firstAired'][0:4].encode('utf-8'),
-                'episodeName':
-                episodename.encode('utf-8'),
-                'premiered':
-                episode['firstAired'].encode('utf-8'),
-                'seasonNumber':
-                str(s),
-                'episodeNumber':
-                str(e)
-            }
-            fullTitle = show['seriesname'].encode('utf-8') + " S" + str(
-                s) + "E" + str(e) + " - " + episodename.encode('utf-8')
-            imdbId = show['imdbId'].encode('utf-8')
-            tvdbId = str(show['id'])
-            tvShowTitle = show['seriesname'].encode('utf-8')
-            year = episode['firstAired'][0:4].encode('utf-8')
-            episodeName = episodename.encode('utf-8')
+            full_title = show['seriesname'].encode('utf-8') + " S" + str(
+                season_num) + "E" + str(
+                    episode_num) + " - " + episodename.encode('utf-8')
+            episode_year = episode['firstAired'][0:4].encode('utf-8')
+            episode_name = episodename.encode('utf-8')
             premiered = episode['firstAired'].encode('utf-8')
-            seasonNumber = str(s)
-            episodeNumber = str(e)
-            xmlTemplate += xmlTemplateBody % data
+            episode_number = str(episode_num)
+
+            data = {
+                'fullTitle': full_title,
+                'imdbId': imdb_id,
+                'tvdbId': tvdb_id,
+                'tvShowTitle': tv_show_title,
+                'year': episode_year,
+                'episodeName': episode_name,
+                'premiered': premiered,
+                'seasonNumber': season_number,
+                'episodeNumber': episode_number
+            }
+
+            XML_EPISODE += XML_EPISODE_BODY % data
 
         current_directory = os.getcwd()
         xml_directory = os.path.join(current_directory, r'xml')
         if not os.path.exists(xml_directory):
             os.makedirs(xml_directory)
 
-        show_directory = show['seriesname']
+        show_directory = re.sub('\W+', '', show['seriesname'])
         xml2_directory = os.path.join(current_directory, xml_directory)
         final_directory = os.path.join(xml2_directory, show_directory)
         if not os.path.exists(final_directory):
             os.makedirs(final_directory)
 
-        save_path_file = 'xml\\' + show['seriesname'] + '\\' + \
-            show['seriesname'].encode('utf-8').replace(" ", "") + '.xml'
-        with open(save_path_file, 'w') as f:
-            f.write(xmlSeriesTemplate)
+        save_path_file = (
+            'xml\\' + show_directory + '\\' + show_directory + '.xml')
+        with open(save_path_file, 'w') as xml_file:
+            xml_file.write(XML_SEASON)
 
-        save_path_file = ('xml\\' + show['seriesname'] + '\\' +
-                          show['seriesname'].encode('utf-8').replace(" ", "") +
-                          str(s).zfill(2) + '.xml')
-        with open(save_path_file, 'w') as f:
-            f.write(xmlTemplate)
+        save_path_file = ('xml\\' + show_directory + '\\' + show_directory +
+                          str(season_num).zfill(2) + '.xml')
+        with open(save_path_file, 'w') as xml_file:
+            xml_file.write(XML_EPISODE)
     print("XML files written to " + final_directory)
+
 
 if __name__ == '__main__':
     main(sys.argv)
